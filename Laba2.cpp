@@ -47,10 +47,6 @@ int main(int argc, char *argv[]){
     double error = 1;
     int iteration = 0;
 
-#ifdef NVPROF_
-    nvtxRangePush("MainCycle");
-#endif
-
 #pragma acc data copy(F[:size][:size]) create(Fnew[:size][:size])
     while (error > eps && iteration < iter_max )
     {
@@ -74,10 +70,6 @@ int main(int argc, char *argv[]){
         
         iteration++;
     }
-
-#ifdef NVPROF_
-    nvtxRangePop();
-#endif
 
     cout << "Iterations: " << iteration << endl;
     cout << "Error: " << error << endl;
