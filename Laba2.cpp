@@ -63,14 +63,11 @@ int main(int argc, char *argv[]){
 
     while (error > eps && iteration < iter_max )
     {
-        error = 0.0;
-
-#pragma acc parallel loop reduction(max:error) async(0)
+#pragma acc parallel loop async(0)
         for( int j = 1; j < size-1; j++) {
-#pragma acc loop reduction(max:error)
+#pragma acc loop
             for( int i = 1; i < size-1; i++ ) {
                 Fnew[j][i] = 0.25 * ( F[j][i+1] + F[j][i-1] + F[j-1][i] + F[j+1][i]);
-                error = fmax( error, fabs(Fnew[j][i] - F[j][i]));
             }
         }
 
@@ -78,13 +75,24 @@ int main(int argc, char *argv[]){
 
 #pragma acc parallel loop async(1)
         for( int j = 1; j < size-1; j++) {
-#pragma acc loop 
+#pragma acc loop
             for( int i = 1; i < size-1; i++ ) {
                 F[j][i] = 0.25 * ( Fnew[j][i+1] + Fnew[j][i-1] + Fnew[j-1][i] + Fnew[j+1][i]);
             }
         }
 
 #pragma acc wait(1)
+
+        if (iteration % 10 == 0){
+            error = 0.0;
+#pragma acc parallel loop reduction(max:error)
+            for( int j = 1; j < size-1; j++) {
+#pragma acc loop reduction(max:error)
+                for( int i = 1; i < size-1; i++ ) {
+                    error = fmax( error, fabs(Fnew[j][i] - F[j][i]));
+                }
+            }
+        }
 
         iteration+=2;
     }
