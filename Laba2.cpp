@@ -3,7 +3,7 @@
 #include <sstream>
 #include <cmath>
 #include <chrono>
-#include <openacc.h>
+//#include <openacc.h>
 
 using namespace std;
 
@@ -12,7 +12,7 @@ int iter_max = 1E6;
 int size = 128;
 
 int main(int argc, char *argv[]){
-    acc_set_device_num(2, acc_device_default);
+    //acc_set_device_num(2, acc_device_default);
     auto start_time = chrono::high_resolution_clock::now();
     for(int arg = 0; arg < argc; arg++){ // Ввод данных
         stringstream stream;
@@ -49,21 +49,23 @@ int main(int argc, char *argv[]){
     double error = 1;
     int iteration = 0;
 
+
+
 #pragma acc data copy(F[:size][:size]) create(Fnew[:size][:size])
 {
 #pragma acc parallel loop
-        for( int j = 0; j < size; j++) {
-            Fnew[j][0] = F[j][0];
-            Fnew[0][j] = F[0][j];
-            Fnew[j][size-1] = F[j][size-1];
-            Fnew[size-1][j] = F[size-1][j];
-        }
-        
+    for( int j = 0; j < size; j++) {
+        Fnew[j][0] = F[j][0];
+        Fnew[0][j] = F[0][j];
+        Fnew[j][size-1] = F[j][size-1];
+        Fnew[size-1][j] = F[size-1][j];
+    }
+
     while (error > eps && iteration < iter_max )
     {
         error = 0.0;
 
-#pragma acc parallel loop reduction(max:error)
+#pragma acc parallel loop reduction(max:error) async(0)
         for( int j = 1; j < size-1; j++) {
 #pragma acc loop reduction(max:error)
             for( int i = 1; i < size-1; i++ ) {
@@ -71,16 +73,24 @@ int main(int argc, char *argv[]){
                 error = fmax( error, fabs(Fnew[j][i] - F[j][i]));
             }
         }
-#pragma acc serial
-{
-        double** save = F;
-        F = Fnew;
-        Fnew = save;
-}
 
-        iteration++;
+#pragma acc wait(0)
+
+#pragma acc parallel loop async(1)
+        for( int j = 1; j < size-1; j++) {
+#pragma acc loop 
+            for( int i = 1; i < size-1; i++ ) {
+                F[j][i] = 0.25 * ( Fnew[j][i+1] + Fnew[j][i-1] + Fnew[j-1][i] + Fnew[j+1][i]);
+            }
+        }
+
+#pragma acc wait(1)
+
+        iteration+=2;
     }
 }
+
+
 
     cout << "Iterations: " << iteration << endl;
     cout << "Error: " << error << endl;
