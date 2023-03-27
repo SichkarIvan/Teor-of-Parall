@@ -83,7 +83,7 @@ int main(int argc, char *argv[]){
 
 #pragma acc wait(1)
 
-        if (iteration % 10 == 0){
+        if (iteration % 100 == 0){
             error = 0.0;
 #pragma acc parallel loop reduction(max:error)
             for( int j = 1; j < size-1; j++) {
