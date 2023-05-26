@@ -117,9 +117,9 @@ int main(int argc, char** argv) {
 ///////////////////////////////////////////////////////////////////// Основной цикл
     size_t iter = 0;
     double error = 1.0;
-    cudaStream_t stream, mem_stream;
+    cudaStream_t stream, datatransfer;
     cudaStreamCreate(&stream);
-    cudaStreamCreate(&mem_stream);
+    cudaStreamCreate(&datatransfer);
 
 	clock_t begin = clock();
 	while((iter < iter_max) && error > eps)	{
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
 		if (iter % UPDATE == 0) {
             subtraction<<<blocks, threads, 0, stream>>>(A_new_Device, A_Device, A_error_Device, size);
 			cub::DeviceReduce::Max(tempStorage, tempStorageSize, A_error_Device, deviceError, size * size_y, stream);
-			cudaMemcpyAsync(&error, deviceError, sizeof(double), cudaMemcpyDeviceToHost, stream);
+			cudaMemcpyAsync(&error, deviceError, sizeof(double), cudaMemcpyDeviceToHost, datatransfer);
 
 			// Находим максимальную ошибку среди всех и передаём её всем процессам
 			MPI_Allreduce((void*)&error,(void*)&error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
@@ -138,17 +138,17 @@ int main(int argc, char** argv) {
         ncclGroupStart();
         if (DEVICE != 0)
 		{
-            ncclSend(A_new_Device + size + 1, size - 2, ncclDouble, DEVICE - 1, comm, stream); 
-            ncclRecv(A_new_Device + 1, size - 2, ncclDouble, DEVICE - 1, comm, stream);
+            ncclSend(A_new_Device + size + 1, size - 2, ncclDouble, DEVICE - 1, comm, datatransfer); 
+            ncclRecv(A_new_Device + 1, size - 2, ncclDouble, DEVICE - 1, comm, datatransfer);
 
 		}
         // Обмен нижней границей
 		if (DEVICE != COUNT_DEVICE - 1)
 		{
             ncclSend(A_new_Device + (size_y - 2) * size + 1, 
-				size - 2, ncclDouble, DEVICE + 1, comm, stream);
+				size - 2, ncclDouble, DEVICE + 1, comm, datatransfer);
             ncclRecv(A_new_Device + (size_y - 1) * size + 1, 
-				size - 2, ncclDouble, DEVICE + 1, comm, stream);
+				size - 2, ncclDouble, DEVICE + 1, comm, datatransfer);
 		}
         ncclGroupEnd();
 
@@ -165,6 +165,7 @@ int main(int argc, char** argv) {
 	cudaFree(A_new_Device);
 	cudaFree(A_error_Device);
 	cudaFree(tempStorage);
+    cudaStreamDestroy(datatransfer);
 
 	MPI_Finalize();
 

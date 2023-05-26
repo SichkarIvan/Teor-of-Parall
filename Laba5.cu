@@ -112,14 +112,17 @@ int main(int argc, char** argv) {
     size_t iter = 0;
     double error = 1.0;
 	clock_t begin = clock();
+    cudaStream_t stream, datatransfer;
+    cudaStreamCreate(&stream);
+    cudaStreamCreate(&datatransfer);
 	while((iter < iter_max) && error > eps)	{
-		iterate<<<blocks, threads>>>(A_Device, A_new_Device, size, size_y);
+		iterate<<<blocks, threads, 0, stream>>>(A_Device, A_new_Device, size, size_y);
 		iter++;
 		// Расчитываем ошибку каждую сотую итерацию
 		if (iter % UPDATE == 0) {
-            subtraction<<<blocks, threads>>>(A_new_Device, A_Device, A_error_Device, size);
-			cub::DeviceReduce::Max(tempStorage, tempStorageSize, A_error_Device, deviceError, size * size_y);
-			cudaMemcpyAsync(&error, deviceError, sizeof(double), cudaMemcpyDeviceToHost);
+            subtraction<<<blocks, threads, 0, stream>>>(A_new_Device, A_Device, A_error_Device, size);
+			cub::DeviceReduce::Max(tempStorage, tempStorageSize, A_error_Device, deviceError, size * size_y, stream);
+			cudaMemcpyAsync(&error, deviceError, sizeof(double), cudaMemcpyDeviceToHost, datatransfer);
 
 			// Находим максимальную ошибку среди всех и передаём её всем процессам
 			MPI_Allreduce((void*)&error,(void*)&error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
@@ -144,7 +147,8 @@ int main(int argc, char** argv) {
 	cudaFree(A_new_Device);
 	cudaFree(A_error_Device);
 	cudaFree(tempStorage);
-
+    cudaStreamDestroy(stream);
+    cudaStreamDestroy(datatransfer);
 	MPI_Finalize();
 
 	return 0;
