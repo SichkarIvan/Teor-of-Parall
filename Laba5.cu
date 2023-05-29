@@ -20,15 +20,16 @@ __global__ void iterate(double* A, double* A_new, size_t size_x, size_t size_y) 
 	size_t j = blockIdx.x * blockDim.x + threadIdx.x;
     size_t i = blockIdx.y * blockDim.y + threadIdx.y;
 	
-    if ((j == 0) || (i == 0) || (i == size_y - 1) || (j == size_x - 1)) return; // Don't update borders
+    if ((j == 0) || (i == 0) || (i >= size_y - 1) || (j >= size_x - 1)) return; // Don't update borders
     A_new[i * size_x + j] = 0.25 * (A[i * size_x + j - 1] + A[(i - 1) * size_x + j] + A[(i + 1) * size_x + j] + A[i * size_x + j + 1]);	
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////// Функция разницы матриц
-__global__ void subtraction(double* A, double* A_new, double* A_err, size_t size_x) {
+__global__ void subtraction(double* A, double* A_new, double* A_err, size_t size_x, size_t size_y) {
 	int j = blockIdx.x * blockDim.x + threadIdx.x;
     int i = blockIdx.y * blockDim.y + threadIdx.y;
+    if ((i >= size_y) || (j >= size_x)) return;
 	A_err[i * size_x + j] = A[i * size_x + j] - A_new[i * size_x + j];
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,7 +121,7 @@ int main(int argc, char** argv) {
 		iter++;
 		// Расчитываем ошибку каждую сотую итерацию
 		if (iter % UPDATE == 0) {
-            subtraction<<<blocks, threads, 0, stream>>>(A_new_Device, A_Device, A_error_Device, size);
+            subtraction<<<blocks, threads, 0, stream>>>(A_new_Device, A_Device, A_error_Device, size, size_y);
 			cub::DeviceReduce::Max(tempStorage, tempStorageSize, A_error_Device, deviceError, size * size_y, stream);
 			cudaMemcpyAsync(&error, deviceError, sizeof(double), cudaMemcpyDeviceToHost, datatransfer);
 
