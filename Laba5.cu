@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
             subtraction<<<blocks, threads, 0, stream>>>(A_new_Device, A_Device, A_error_Device, size, size_y);
 			cub::DeviceReduce::Max(tempStorage, tempStorageSize, A_error_Device, deviceError, size * size_y, stream);
 			cudaMemcpyAsync(&error, deviceError, sizeof(double), cudaMemcpyDeviceToHost, datatransfer);
-
+            cudaStreamSynchronize(datatransfer); 
 			// Находим максимальную ошибку среди всех и передаём её всем процессам
 			MPI_Allreduce((void*)&error,(void*)&error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 		}
